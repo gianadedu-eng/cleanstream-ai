@@ -17,13 +17,6 @@ export default {
         );
       }
 
-      /*
-       * PERSONAL PROFILE
-       *
-       * The website can send the child's age and
-       * personalised family rules to the Worker.
-       */
-
       const childAge =
         url.searchParams.get("age") || "10";
 
@@ -41,7 +34,141 @@ export default {
       }
 
       /*
-       * Existing CleanStream calibration dataset.
+       * NORMALISE THE FAMILY RULE SETTINGS
+       */
+
+      const normaliseRule = (value) => {
+        if (!value) return "";
+        return String(value).toUpperCase().trim();
+      };
+
+      const holidayRule = normaliseRule(
+        familyRules["Holiday celebrations"]
+      );
+
+      const birthdayRule = normaliseRule(
+        familyRules["Birthday celebrations"]
+      );
+
+      const magicRule = normaliseRule(
+        familyRules["Witchcraft / magic / supernatural"]
+      );
+
+      /*
+       * HARD FAMILY RULE CHECKS
+       *
+       * These rules are enforced by CleanStream
+       * when the title itself gives a clear indication.
+       */
+
+      const lowerTitle = title.toLowerCase();
+
+      const holidayWords = [
+        "christmas",
+        "halloween",
+        "easter",
+        "thanksgiving",
+        "new year",
+        "new year's",
+        "new years",
+        "valentine",
+        "valentine's"
+      ];
+
+      const birthdayWords = [
+        "birthday",
+        "birthdays"
+      ];
+
+      const magicWords = [
+        "witch",
+        "witches",
+        "witchcraft",
+        "wizard",
+        "wizards",
+        "wizardry",
+        "spell",
+        "spells",
+        "sorcery",
+        "magic",
+        "magical"
+      ];
+
+      const containsHolidayWord =
+        holidayWords.some(
+          word => lowerTitle.includes(word)
+        );
+
+      const containsBirthdayWord =
+        birthdayWords.some(
+          word => lowerTitle.includes(word)
+        );
+
+      const containsMagicWord =
+        magicWords.some(
+          word => lowerTitle.includes(word)
+        );
+
+      /*
+       * HARD RED:
+       * Holiday / birthday / magic when the
+       * corresponding family rule is BLOCK.
+       *
+       * This is intentionally based on the title,
+       * because we cannot claim to know unseen
+       * episode content from the title alone.
+       */
+
+      if (
+        holidayRule === "BLOCK" &&
+        containsHolidayWord
+      ) {
+        return Response.json({
+          title,
+          decision: "RED",
+          emoji: "🔴",
+          reason:
+            "The title indicates an individual holiday-themed episode, and this family's rules block holiday celebrations.",
+          source:
+            "CleanStream family rule engine",
+          confidence: "HIGH"
+        });
+      }
+
+      if (
+        birthdayRule === "BLOCK" &&
+        containsBirthdayWord
+      ) {
+        return Response.json({
+          title,
+          decision: "RED",
+          emoji: "🔴",
+          reason:
+            "The title indicates a birthday-themed episode, and this family's rules block birthday celebrations.",
+          source:
+            "CleanStream family rule engine",
+          confidence: "HIGH"
+        });
+      }
+
+      if (
+        magicRule === "BLOCK" &&
+        containsMagicWord
+      ) {
+        return Response.json({
+          title,
+          decision: "RED",
+          emoji: "🔴",
+          reason:
+            "The title indicates witchcraft, magic or similar supernatural practices, and this family's rules block this category.",
+          source:
+            "CleanStream family rule engine",
+          confidence: "HIGH"
+        });
+      }
+
+      /*
+       * EXISTING CALIBRATION DATASET
        */
 
       const results = {
@@ -107,14 +234,7 @@ export default {
       };
 
       const result =
-        results[title.toLowerCase()];
-
-      /*
-       * Existing calibration results remain available.
-       *
-       * For now these known examples are returned
-       * exactly as calibrated.
-       */
+        results[lowerTitle];
 
       if (result) {
         return Response.json({
@@ -122,12 +242,13 @@ export default {
           decision: result[0],
           emoji: result[1],
           reason: result[2],
-          source: "CleanStream calibration dataset"
+          source:
+            "CleanStream calibration dataset"
         });
       }
 
       /*
-       * AI unavailable
+       * AI UNAVAILABLE
        */
 
       if (!env.AI) {
@@ -144,15 +265,17 @@ export default {
 
       try {
         /*
-         * Convert the family's selected rules into
-         * clear instructions for the AI.
+         * CONVERT FAMILY RULES INTO AI INSTRUCTIONS
          */
 
         const ruleInstructions =
           Object.entries(familyRules)
             .map(
               ([rule, setting]) =>
-                "- " + rule + ": " + setting
+                "- " +
+                rule +
+                ": " +
+                normaliseRule(setting)
             )
             .join("\n");
 
@@ -163,50 +286,52 @@ export default {
           childAge +
           " in the UK.\n\n" +
 
-          "Title: \"" +
+          'Title: "' +
           title +
-          "\"\n\n" +
+          '"\n\n' +
 
           "THIS FAMILY'S PERSONAL SCREENING RULES:\n" +
 
-          (ruleInstructions ||
-            "- No personalised rules were supplied.") +
+          (
+            ruleInstructions ||
+            "- No personalised rules were supplied."
+          ) +
 
           "\n\n" +
 
           "RULE SETTINGS:\n" +
           "ALLOW means the family allows that category.\n" +
           "REVIEW means the category requires parent review.\n" +
-          "BLOCK means the category conflicts with the family's rules and should result in RED when the category is meaningfully present.\n\n" +
+          "BLOCK means the category conflicts with the family's rules and should result in RED when meaningfully present.\n\n" +
 
           "IMPORTANT:\n" +
           "You must NOT claim that you researched, verified, browsed, or checked this programme.\n" +
           "Use only information you are genuinely confident you know.\n" +
           "Do not invent episodes, characters, relationships, themes, jokes, language, or other content.\n" +
-          "If important information is uncertain, use YELLOW.\n\n" +
+          "If important information is uncertain, use YELLOW.\n" +
+          "Never turn uncertainty into GREEN.\n\n" +
 
           "HOLIDAY AND BIRTHDAY RULE:\n" +
-          "If the title is an individual episode substantially centred on a birthday or holiday celebration such as Christmas, Halloween, Easter, Thanksgiving or New Year, and the family's Holiday celebrations or Birthday celebrations rule is BLOCK, use RED.\n" +
-          "A brief mention is not enough.\n" +
-          "If the title is a series rather than an individual episode, do not use RED simply because the series may contain holiday or birthday episodes.\n" +
+          "If an individual episode is substantially centred on a birthday or holiday celebration such as Christmas, Halloween, Easter, Thanksgiving or New Year, and the corresponding family rule is BLOCK, use RED.\n" +
+          "A brief mention of a holiday is not enough.\n" +
+          "If the title is a series rather than an individual episode, do not mark the entire series RED merely because it may contain holiday or birthday episodes.\n" +
           "Individual episodes should be screened separately.\n\n" +
 
           "WITCHCRAFT AND MAGIC RULE:\n" +
           "If the family's Witchcraft / magic / supernatural rule is BLOCK and the programme or episode meaningfully contains witchcraft, wizardry, spells, sorcery, magic or similar supernatural practices, use RED.\n" +
-          "If you cannot determine this reliably, use YELLOW.\n\n" +
+          "If this cannot be determined reliably, use YELLOW.\n\n" +
 
           "DECISION RULE:\n" +
-          "GREEN = the programme is suitable under the family's selected rules and you have strong confidence.\n" +
+          "GREEN = suitable under the family's selected rules and strong confidence.\n" +
           "YELLOW = information is incomplete, uncertain, conflicting, or a REVIEW category is meaningfully present.\n" +
-          "RED = a BLOCK category is meaningfully present and you have strong confidence.\n\n" +
-
-          "Never turn uncertainty into GREEN.\n\n" +
+          "RED = a BLOCK category is meaningfully present and there is strong confidence.\n\n" +
 
           "Return ONLY valid JSON in exactly this format:\n" +
+
           "{\n" +
-          "  \"decision\": \"GREEN\" or \"YELLOW\" or \"RED\",\n" +
-          "  \"reason\": \"short factual explanation\",\n" +
-          "  \"confidence\": \"HIGH\" or \"MEDIUM\" or \"LOW\"\n" +
+          '  "decision": "GREEN" or "YELLOW" or "RED",\n' +
+          '  "reason": "short factual explanation",\n' +
+          '  "confidence": "HIGH" or "MEDIUM" or "LOW"\n' +
           "}";
 
         const aiResponse =
@@ -243,7 +368,8 @@ export default {
             emoji: "🟡",
             reason:
               "The AI did not provide a reliable structured result. Parent review is required rather than guessing.",
-            source: "Cloudflare Workers AI",
+            source:
+              "Cloudflare Workers AI",
             confidence: "LOW"
           });
         }
@@ -254,11 +380,17 @@ export default {
           "RED"
         ];
 
-        if (!allowed.includes(parsed.decision)) {
+        if (
+          !allowed.includes(
+            parsed.decision
+          )
+        ) {
           parsed.decision = "YELLOW";
         }
 
-        if (parsed.confidence === "LOW") {
+        if (
+          parsed.confidence === "LOW"
+        ) {
           parsed.decision = "YELLOW";
         }
 
@@ -271,14 +403,17 @@ export default {
 
         return Response.json({
           title,
-          decision: parsed.decision,
+          decision:
+            parsed.decision,
           emoji,
           reason:
             parsed.reason ||
             "Parent review is required.",
-          source: "Cloudflare Workers AI",
+          source:
+            "Cloudflare Workers AI",
           confidence:
-            parsed.confidence || "LOW"
+            parsed.confidence ||
+            "LOW"
         });
 
       } catch (error) {
