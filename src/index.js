@@ -53,8 +53,9 @@ export default {
                 role: "user",
                 content:
                   "Classify this programme title for a strict children's profile aged 10 in the UK: " +
-                  title +
-                  ". Return only JSON with decision GREEN, YELLOW or RED, a short reason, and confidence HIGH, MEDIUM or LOW. Do not claim to have researched or verified the programme. If uncertain, use YELLOW."
+title +
+". Return only JSON with decision GREEN, YELLOW, RED or EXCLUDE, a short reason, and confidence HIGH, MEDIUM or LOW. Do not claim to have researched or verified the programme. If uncertain, use YELLOW. " +
+"IMPORTANT HOLIDAY AND BIRTHDAY RULE: If the title is an individual episode and the episode is substantially centred on a birthday or holiday celebration such as Christmas, Halloween, Easter, Thanksgiving or New Year, use EXCLUDE. A brief mention of a holiday is not enough. If the title is a series rather than an individual episode, do not use EXCLUDE simply because the series may contain holiday or birthday episodes. If you cannot determine this reliably, use YELLOW."
               }
             ]
           }
