@@ -122,10 +122,8 @@ If you are not confident that the information is reliable, use YELLOW.
         );
 
         const text =
-          aiResponse?.response ||
-          aiResponse?.result ||
-          "";
-
+  aiResponse?.choices?.[0]?.message?.content ||
+  "";
         const cleaned = String(text)
           .replace(/```json/gi, "")
           .replace(/```/g, "")
