@@ -62,14 +62,51 @@ export default {
 
         const text = aiResponse?.choices?.[0]?.message?.content || "";
 
-        return Response.json({
-          title,
-          decision: "YELLOW",
-          emoji: "🟡",
-          reason: text || "AI did not provide a reliable result. Parent review is required.",
-          source: "Cloudflare Workers AI",
-          confidence: "LOW"
-        });
+const cleaned = text
+  .replace(/```json/gi, "")
+  .replace(/```/g, "")
+  .trim();
+
+let parsed;
+
+try {
+  parsed = JSON.parse(cleaned);
+} catch {
+  return Response.json({
+    title,
+    decision: "YELLOW",
+    emoji: "🟡",
+    reason: "The AI did not provide a reliable structured result. Parent review is required rather than guessing.",
+    source: "Cloudflare Workers AI",
+    confidence: "LOW"
+  });
+}
+
+const allowed = ["GREEN", "YELLOW", "RED"];
+
+if (!allowed.includes(parsed.decision)) {
+  parsed.decision = "YELLOW";
+}
+
+if (parsed.confidence === "LOW") {
+  parsed.decision = "YELLOW";
+}
+
+const emoji =
+  parsed.decision === "GREEN"
+    ? "🟢"
+    : parsed.decision === "RED"
+      ? "🔴"
+      : "🟡";
+
+return Response.json({
+  title,
+  decision: parsed.decision,
+  emoji,
+  reason: parsed.reason || "Parent review is required.",
+  source: "Cloudflare Workers AI",
+  confidence: parsed.confidence || "LOW"
+});
       } catch (error) {
         return Response.json({
           title,
