@@ -1,1 +1,532 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CleanStream AI</title><style>body{font-family:system-ui,sans-serif;max-width:760px;margin:auto;padding:24px;background:#f5f6f8;color:#18202a}.card{background:#fff;padding:22px;border-radius:14px;margin:16px 0;box-shadow:0 2px 10px #0001}input{width:100%;box-sizing:border-box;padding:13px;border:1px solid #ccd2d9;border-radius:10px;font-size:17px}button{margin-top:10px;padding:11px 18px;border:0;border-radius:9px;font-weight:600}.result{margin-top:18px;padding:16px;border-radius:12px}.green{background:#dff5e5}.yellow{background:#fff0bf}.red{background:#ffdfe0}.muted{color:#66717c;font-size:14px}</style></head><body><div class="card"><h1>🧹 CleanStream AI</h1><p class="muted">Strict Clean · Age 10 · UK</p><input id="title" placeholder="Enter a programme title"><button onclick="analyse()">Analyse</button><div id="out"></div></div><script>async function analyse(){const t=document.getElementById('title').value.trim(),o=document.getElementById('out');if(!t)return;o.innerHTML='<p>Analysing…</p>';try{const r=await fetch('/api/analyse?title='+encodeURIComponent(t)),d=await r.json();o.innerHTML='<div class="result '+d.decision.toLowerCase()+'"><h2>'+d.emoji+' '+d.decision+'</h2><p><b>'+d.title+'</b></p><p>'+d.reason+'</p><p class="muted">'+d.source+'</p></div>'}catch(e){o.innerHTML='<p>Unable to analyse this title right now.</p>'}}</script></body></html>
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CleanStream AI</title>
+
+<style>
+body{
+  font-family:system-ui,sans-serif;
+  max-width:760px;
+  margin:auto;
+  padding:24px;
+  background:#f5f6f8;
+  color:#18202a
+}
+
+.card{
+  background:#fff;
+  padding:22px;
+  border-radius:14px;
+  margin:16px 0;
+  box-shadow:0 2px 10px #0001
+}
+
+input,select{
+  width:100%;
+  box-sizing:border-box;
+  padding:13px;
+  border:1px solid #ccd2d9;
+  border-radius:10px;
+  font-size:17px;
+  margin:6px 0 12px
+}
+
+button{
+  margin-top:10px;
+  padding:11px 18px;
+  border:0;
+  border-radius:9px;
+  font-weight:600;
+  cursor:pointer
+}
+
+.rule{
+  display:grid;
+  grid-template-columns:1fr 120px;
+  gap:10px;
+  align-items:center;
+  padding:10px 0;
+  border-bottom:1px solid #eee
+}
+
+.rule select{
+  margin:0;
+  font-size:15px
+}
+
+.result{
+  margin-top:18px;
+  padding:16px;
+  border-radius:12px
+}
+
+.green{
+  background:#dff5e5
+}
+
+.yellow{
+  background:#fff0bf
+}
+
+.red{
+  background:#ffdfe0
+}
+
+.muted{
+  color:#66717c;
+  font-size:14px
+}
+
+.hidden{
+  display:none
+}
+
+.profile-name{
+  font-weight:700;
+  margin-bottom:4px
+}
+</style>
+</head>
+
+<body>
+
+<div class="card">
+  <h1>🧹 CleanStream AI</h1>
+
+  <p class="muted">
+    Personalised children's content screening
+  </p>
+
+  <div id="profileSummary" class="hidden">
+    <p class="profile-name" id="profileText"></p>
+
+    <button onclick="editProfile()">
+      Edit child profile
+    </button>
+  </div>
+</div>
+
+
+<div class="card" id="profileCard">
+
+  <h2>👧 Child profile</h2>
+
+  <label>
+    Child's name
+
+    <input
+      id="childName"
+      placeholder="Enter child's name"
+    >
+  </label>
+
+  <label>
+    Child's age
+
+    <select id="childAge">
+
+      <option value="">
+        Choose age
+      </option>
+
+      <option value="4">4</option>
+      <option value="5">5</option>
+      <option value="6">6</option>
+      <option value="7">7</option>
+      <option value="8">8</option>
+      <option value="9">9</option>
+      <option value="10">10</option>
+      <option value="11">11</option>
+      <option value="12">12</option>
+      <option value="13">13</option>
+      <option value="14">14</option>
+      <option value="15">15</option>
+      <option value="16">16</option>
+
+    </select>
+  </label>
+
+
+  <h3>
+    Choose your family's screening rules
+  </h3>
+
+  <p class="muted">
+    Allow = suitable under this rule<br>
+    Review = parent review required<br>
+    Block = do not allow
+  </p>
+
+  <div id="rules"></div>
+
+
+  <button onclick="saveProfile()">
+    Save child profile
+  </button>
+
+</div>
+
+
+<div class="card hidden" id="analyseCard">
+
+  <h2>
+    🔍 Analyse a programme
+  </h2>
+
+  <p class="muted">
+    CleanStream will use this child's personalised rules.
+  </p>
+
+  <input
+    id="title"
+    placeholder="Enter a programme or episode title"
+  >
+
+  <button onclick="analyse()">
+    Analyse
+  </button>
+
+  <div id="out"></div>
+
+</div>
+
+
+<script>
+
+const ruleNames = [
+
+  "Romance / crushes",
+
+  "Dating",
+
+  "Sexual content",
+
+  "Sexual jokes / innuendo",
+
+  "LGBTQ romantic / sexual content",
+
+  "Witchcraft / magic / supernatural",
+
+  "Holiday celebrations",
+
+  "Birthday celebrations",
+
+  "Violence",
+
+  "Horror",
+
+  "Bad language",
+
+  "Alcohol / drugs",
+
+  "Gambling",
+
+  "Blasphemy"
+
+];
+
+
+function createRules(){
+
+  const container =
+    document.getElementById("rules");
+
+  container.innerHTML = "";
+
+  ruleNames.forEach((rule,index) => {
+
+    const row =
+      document.createElement("div");
+
+    row.className = "rule";
+
+    row.innerHTML =
+      "<span>" +
+      rule +
+      "</span>" +
+
+      "<select id='rule" +
+      index +
+      "'>" +
+
+      "<option value='ALLOW'>" +
+      "🟢 Allow" +
+      "</option>" +
+
+      "<option value='REVIEW'>" +
+      "🟡 Review" +
+      "</option>" +
+
+      "<option value='BLOCK' selected>" +
+      "🔴 Block" +
+      "</option>" +
+
+      "</select>";
+
+    container.appendChild(row);
+
+  });
+
+}
+
+
+function saveProfile(){
+
+  const name =
+    document
+      .getElementById("childName")
+      .value
+      .trim();
+
+  const age =
+    document
+      .getElementById("childAge")
+      .value;
+
+  if(!name || !age){
+
+    alert(
+      "Please enter the child's name and age."
+    );
+
+    return;
+  }
+
+
+  const rules = {};
+
+  ruleNames.forEach((rule,index) => {
+
+    rules[rule] =
+      document
+        .getElementById("rule" + index)
+        .value;
+
+  });
+
+
+  const profile = {
+
+    name:name,
+
+    age:age,
+
+    rules:rules
+
+  };
+
+
+  localStorage.setItem(
+    "cleanstreamProfile",
+    JSON.stringify(profile)
+  );
+
+
+  showProfile();
+
+
+  alert(
+    "Child profile saved."
+  );
+
+}
+
+
+function showProfile(){
+
+  const saved =
+    localStorage.getItem(
+      "cleanstreamProfile"
+    );
+
+
+  if(!saved){
+
+    document
+      .getElementById("profileCard")
+      .classList
+      .remove("hidden");
+
+    document
+      .getElementById("analyseCard")
+      .classList
+      .add("hidden");
+
+    document
+      .getElementById("profileSummary")
+      .classList
+      .add("hidden");
+
+    return;
+
+  }
+
+
+  const profile =
+    JSON.parse(saved);
+
+
+  document
+    .getElementById("profileCard")
+    .classList
+    .add("hidden");
+
+
+  document
+    .getElementById("analyseCard")
+    .classList
+    .remove("hidden");
+
+
+  document
+    .getElementById("profileSummary")
+    .classList
+    .remove("hidden");
+
+
+  document
+    .getElementById("profileText")
+    .textContent =
+      profile.name +
+      " · Age " +
+      profile.age;
+
+}
+
+
+function editProfile(){
+
+  const saved =
+    localStorage.getItem(
+      "cleanstreamProfile"
+    );
+
+
+  if(!saved){
+
+    showProfile();
+
+    return;
+
+  }
+
+
+  const profile =
+    JSON.parse(saved);
+
+
+  document
+    .getElementById("childName")
+    .value =
+      profile.name;
+
+
+  document
+    .getElementById("childAge")
+    .value =
+      profile.age;
+
+
+  ruleNames.forEach((rule,index) => {
+
+    document
+      .getElementById("rule" + index)
+      .value =
+        profile.rules[rule] ||
+        "BLOCK";
+
+  });
+
+
+  document
+    .getElementById("profileCard")
+    .classList
+    .remove("hidden");
+
+
+  document
+    .getElementById("analyseCard")
+    .classList
+    .add("hidden");
+
+}
+
+
+function analyse(){
+
+  const t =
+    document
+      .getElementById("title")
+      .value
+      .trim();
+
+
+  const o =
+    document
+      .getElementById("out");
+
+
+  if(!t) return;
+
+
+  o.innerHTML =
+    "<p>Analysing…</p>";
+
+
+  fetch(
+    "/api/analyse?title=" +
+    encodeURIComponent(t)
+  )
+
+  .then(r => r.json())
+
+  .then(d => {
+
+    o.innerHTML =
+
+      '<div class="result ' +
+      d.decision.toLowerCase() +
+      '">' +
+
+      '<h2>' +
+      d.emoji +
+      ' ' +
+      d.decision +
+      '</h2>' +
+
+      '<p><b>' +
+      d.title +
+      '</b></p>' +
+
+      '<p>' +
+      d.reason +
+      '</p>' +
+
+      '<p class="muted">' +
+      d.source +
+      '</p>' +
+
+      '</div>';
+
+  })
+
+  .catch(() => {
+
+    o.innerHTML =
+      "<p>Unable to analyse this title right now.</p>";
+
+  });
+
+}
+
+
+createRules();
+
+showProfile();
+
+</script>
+
+</body>
+</html>
