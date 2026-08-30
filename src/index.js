@@ -123,26 +123,6 @@ Never turn uncertainty into GREEN.
 Never claim that information has been independently verified.
 `;
 
-Evaluate the programme title below for a child aged 10 in the UK.
-
-Title: "${title}"
-
-Return ONLY valid JSON in this exact format:
-{
-  "decision": "GREEN" or "YELLOW" or "RED",
-  "reason": "short explanation",
-  "confidence": "HIGH" or "MEDIUM" or "LOW"
-}
-
-Rules:
-GREEN = no significant concerns for this strict profile.
-YELLOW = some potentially concerning, uncertain, or mild content requiring parent review.
-RED = significant concerns for this strict profile.
-
-Do not invent facts about the programme.
-If you are not confident that the information is reliable, use YELLOW.
-`;
-
         const aiResponse = await env.AI.run(
           "@cf/google/gemma-4-26b-a4b-it",
           {
@@ -156,8 +136,8 @@ If you are not confident that the information is reliable, use YELLOW.
         );
 
         const text =
-  aiResponse?.choices?.[0]?.message?.content ||
-  "";
+          aiResponse?.choices?.[0]?.message?.content || "";
+
         const cleaned = String(text)
           .replace(/```json/gi, "")
           .replace(/```/g, "")
