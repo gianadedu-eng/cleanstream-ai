@@ -93,6 +93,40 @@ Evaluate the programme title below for a child aged 10 in the UK.
 
 Title: "${title}"
 
+IMPORTANT:
+You must NOT claim that you researched, verified, browsed, or checked this programme.
+Use only information you are genuinely confident you know.
+Do not invent episodes, characters, relationships, themes, jokes, language, or other content.
+
+Return ONLY valid JSON in this exact format:
+{
+  "decision": "GREEN" or "YELLOW" or "RED",
+  "reason": "short factual explanation",
+  "confidence": "HIGH" or "MEDIUM" or "LOW"
+}
+
+Strict rules:
+
+GREEN:
+Use only when you have strong confidence that the programme is suitable for this strict profile.
+
+YELLOW:
+Use when information is incomplete, uncertain, conflicting, or when the programme contains potentially concerning material that requires parent review.
+
+RED:
+Use only when you have strong confidence that the programme contains significant content that clearly conflicts with this strict profile.
+
+If you are unsure about any important part of the programme, choose YELLOW.
+
+Never turn uncertainty into GREEN.
+
+Never claim that information has been independently verified.
+`;
+
+Evaluate the programme title below for a child aged 10 in the UK.
+
+Title: "${title}"
+
 Return ONLY valid JSON in this exact format:
 {
   "decision": "GREEN" or "YELLOW" or "RED",
