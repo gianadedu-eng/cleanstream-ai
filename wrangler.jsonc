@@ -3,6 +3,6 @@
   "name":"cleanstream-ai-v02",
   "main":"src/index.js",
   "compatibility_date":"2026-08-28",
-  "assets":{"directory":"./public","binding":"ASSETS"},
+  "assets":{"directory":".","binding":"ASSETS"},
   "ai":{"binding":"AI"}
 }
