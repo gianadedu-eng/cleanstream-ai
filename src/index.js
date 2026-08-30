@@ -82,7 +82,7 @@ try {
   });
 }
 
-const allowed = ["GREEN", "YELLOW", "RED"];
+const allowed = ["GREEN", "YELLOW", "RED", "EXCLUDE"];
 
 if (!allowed.includes(parsed.decision)) {
   parsed.decision = "YELLOW";
