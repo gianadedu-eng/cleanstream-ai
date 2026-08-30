@@ -93,6 +93,7 @@ button{
 <body>
 
 <div class="card">
+
   <h1>🧹 CleanStream AI</h1>
 
   <p class="muted">
@@ -100,12 +101,15 @@ button{
   </p>
 
   <div id="profileSummary" class="hidden">
+
     <p class="profile-name" id="profileText"></p>
 
     <button onclick="editProfile()">
       Edit child profile
     </button>
+
   </div>
+
 </div>
 
 
@@ -121,6 +125,7 @@ button{
       placeholder="Enter child's name"
     >
   </label>
+
 
   <label>
     Child's age
@@ -146,6 +151,7 @@ button{
       <option value="16">16</option>
 
     </select>
+
   </label>
 
 
@@ -158,6 +164,7 @@ button{
     Review = parent review required<br>
     Block = do not allow
   </p>
+
 
   <div id="rules"></div>
 
@@ -179,14 +186,17 @@ button{
     CleanStream will use this child's personalised rules.
   </p>
 
+
   <input
     id="title"
     placeholder="Enter a programme or episode title"
   >
 
+
   <button onclick="analyse()">
     Analyse
   </button>
+
 
   <div id="out"></div>
 
@@ -235,12 +245,14 @@ function createRules(){
 
   container.innerHTML = "";
 
+
   ruleNames.forEach((rule,index) => {
 
     const row =
       document.createElement("div");
 
     row.className = "rule";
+
 
     row.innerHTML =
       "<span>" +
@@ -265,6 +277,7 @@ function createRules(){
 
       "</select>";
 
+
     container.appendChild(row);
 
   });
@@ -280,10 +293,12 @@ function saveProfile(){
       .value
       .trim();
 
+
   const age =
     document
       .getElementById("childAge")
       .value;
+
 
   if(!name || !age){
 
@@ -292,10 +307,12 @@ function saveProfile(){
     );
 
     return;
+
   }
 
 
   const rules = {};
+
 
   ruleNames.forEach((rule,index) => {
 
@@ -454,70 +471,161 @@ function editProfile(){
 }
 
 
-function analyse(){
+async function analyse(){
 
-  const t =
+  const title =
     document
       .getElementById("title")
       .value
       .trim();
 
 
-  const o =
+  const output =
     document
       .getElementById("out");
 
 
-  if(!t) return;
+  if(!title){
+
+    return;
+
+  }
 
 
-  o.innerHTML =
-    "<p>Analysing…</p>";
+  const saved =
+    localStorage.getItem(
+      "cleanstreamProfile"
+    );
 
 
-  fetch(
-    "/api/analyse?title=" +
-    encodeURIComponent(t)
-  )
+  if(!saved){
 
-  .then(r => r.json())
+    output.innerHTML =
+      "<p>Please create a child profile first.</p>";
 
-  .then(d => {
+    return;
 
-    o.innerHTML =
+  }
+
+
+  const profile =
+    JSON.parse(saved);
+
+
+  output.innerHTML =
+    "<p>Analysing using " +
+    profile.name +
+    "'s rules…</p>";
+
+
+  try{
+
+    const query =
+      new URLSearchParams();
+
+
+    query.set(
+      "title",
+      title
+    );
+
+
+    query.set(
+      "age",
+      profile.age
+    );
+
+
+    query.set(
+      "rules",
+      JSON.stringify(profile.rules)
+    );
+
+
+    const response =
+      await fetch(
+        "/api/analyse?" +
+        query.toString()
+      );
+
+
+    const data =
+      await response.json();
+
+
+    if(!response.ok){
+
+      throw new Error(
+        data.error ||
+        "Analysis failed"
+      );
+
+    }
+
+
+    output.innerHTML =
 
       '<div class="result ' +
-      d.decision.toLowerCase() +
+      data.decision.toLowerCase() +
       '">' +
 
-      '<h2>' +
-      d.emoji +
-      ' ' +
-      d.decision +
-      '</h2>' +
+      "<h2>" +
+      (data.emoji || "") +
+      " " +
+      data.decision +
+      "</h2>" +
 
-      '<p><b>' +
-      d.title +
-      '</b></p>' +
+      "<p><b>" +
+      escapeHtml(data.title || title) +
+      "</b></p>" +
 
-      '<p>' +
-      d.reason +
-      '</p>' +
+      "<p>" +
+      escapeHtml(
+        data.reason ||
+        "Parent review is required."
+      ) +
+      "</p>" +
 
       '<p class="muted">' +
-      d.source +
-      '</p>' +
+      escapeHtml(
+        data.source ||
+        "CleanStream AI"
+      ) +
+      "</p>" +
 
-      '</div>';
+      (data.confidence
+        ? '<p class="muted">Confidence: ' +
+          escapeHtml(data.confidence) +
+          "</p>"
+        : "") +
 
-  })
+      "</div>";
 
-  .catch(() => {
+  }
 
-    o.innerHTML =
+  catch(error){
+
+    output.innerHTML =
       "<p>Unable to analyse this title right now.</p>";
 
-  });
+  }
+
+}
+
+
+function escapeHtml(value){
+
+  return String(value)
+
+    .replace(/&/g,"&amp;")
+
+    .replace(/</g,"&lt;")
+
+    .replace(/>/g,"&gt;")
+
+    .replace(/"/g,"&quot;")
+
+    .replace(/'/g,"&#039;");
 
 }
 
