@@ -1,8 +1,0 @@
-{
-  "$schema":"./node_modules/wrangler/config-schema.json",
-  "name":"cleanstream-ai-v02",
-  "main":"src_index.js",
-  "compatibility_date":"2026-08-28",
-  "assets":{"directory":"./public","binding":"ASSETS"},
-  "ai":{"binding":"AI"}
-}
