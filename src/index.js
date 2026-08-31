@@ -39,7 +39,7 @@ export default {
       };
 
       /*
-       * FAMILY RULES
+       * HARD FAMILY RULES
        */
 
       const holidayRule = normaliseRule(
@@ -57,10 +57,7 @@ export default {
       );
 
       /*
-       * TITLE-BASED HARD RULES
-       *
-       * These only trigger when the title itself
-       * gives a clear indication.
+       * TITLE-BASED CHECKS
        */
 
       const lowerTitle =
@@ -113,7 +110,7 @@ export default {
         );
 
       /*
-       * HARD BLOCKS
+       * HARD RED RULES
        */
 
       if (
@@ -165,7 +162,7 @@ export default {
       }
 
       /*
-       * AI AVAILABILITY
+       * AI UNAVAILABLE
        */
 
       if (!env.AI) {
@@ -182,7 +179,7 @@ export default {
 
       try {
         /*
-         * SEND THE PARENT'S RULES TO THE AI
+         * FAMILY RULES
          */
 
         const ruleInstructions =
@@ -197,7 +194,7 @@ export default {
             .join("\n");
 
         /*
-         * ASK AI TO IDENTIFY CONTENT CATEGORIES
+         * AI ANALYSIS
          */
 
         const prompt =
@@ -220,9 +217,18 @@ export default {
 
           "\n\n" +
 
-          "Your task is to identify content categories that are meaningfully present.\n" +
+          "Analyse the title as carefully as possible.\n\n" +
 
-          "Possible categories are:\n" +
+          "CONTENT TYPE:\n" +
+          "Choose one of: EDUCATIONAL, DOCUMENTARY, FICTION, REALITY, COMEDY, ANIMATION, OTHER, UNKNOWN.\n\n" +
+
+          "CONTENT CONTEXT:\n" +
+          "Choose all that genuinely apply from: HISTORICAL_EDUCATIONAL, FICTIONAL, FANTASY, REAL_WORLD, HUMOROUS_PARODY, UNKNOWN.\n\n" +
+
+          "SEVERITY:\n" +
+          "For each detected concern, estimate NONE, MILD, MODERATE, STRONG or UNKNOWN.\n\n" +
+
+          "CONTENT CATEGORIES:\n" +
           "- Romance / crushes\n" +
           "- Dating\n" +
           "- Sexual content\n" +
@@ -240,32 +246,40 @@ export default {
 
           "IMPORTANT:\n" +
           "Do not invent episodes, characters, relationships, themes, jokes, language or other content.\n" +
-          "Do not claim that you researched, browsed, verified or independently checked the programme.\n" +
-          "If you cannot reliably determine whether a category is present, mark that category as uncertain rather than claiming it is present.\n" +
-          "A series should not automatically be rejected merely because it may contain an individual holiday or birthday episode.\n" +
-          "Individual episodes should be screened separately.\n\n" +
+          "Do not claim to have researched, browsed, verified or independently checked the programme.\n" +
+          "A series should not automatically be rejected because it may contain individual episodes with a particular theme.\n" +
+          "Individual episodes should be screened separately when possible.\n" +
+          "If important information is uncertain, mark it UNCERTAIN.\n" +
+          "Never turn uncertainty into GREEN.\n\n" +
 
-          "Return ONLY valid JSON in exactly this format:\n" +
+          "PARENT RULE LOGIC:\n" +
+          "ALLOW means the family allows that category.\n" +
+          "REVIEW means the family wants parent review when that category is meaningfully present.\n" +
+          "BLOCK means the category conflicts with the family's rules and should result in RED when meaningfully present.\n\n" +
+
+          "Return ONLY valid JSON in exactly this structure:\n\n" +
 
           "{\n" +
           '  "decision": "GREEN" or "YELLOW" or "RED",\n' +
           '  "reason": "short factual explanation",\n' +
           '  "confidence": "HIGH" or "MEDIUM" or "LOW",\n' +
+          '  "content_type": "EDUCATIONAL" or "DOCUMENTARY" or "FICTION" or "REALITY" or "COMEDY" or "ANIMATION" or "OTHER" or "UNKNOWN",\n' +
+          '  "context": ["HISTORICAL_EDUCATIONAL", "FICTIONAL", "FANTASY", "REAL_WORLD", "HUMOROUS_PARODY", "UNKNOWN"],\n' +
           '  "categories": {\n' +
-          '    "Romance / crushes": "YES" or "NO" or "UNCERTAIN",\n' +
-          '    "Dating": "YES" or "NO" or "UNCERTAIN",\n' +
-          '    "Sexual content": "YES" or "NO" or "UNCERTAIN",\n' +
-          '    "Sexual jokes / innuendo": "YES" or "NO" or "UNCERTAIN",\n' +
-          '    "LGBTQ romantic / sexual content": "YES" or "NO" or "UNCERTAIN",\n' +
-          '    "Witchcraft / magic / supernatural": "YES" or "NO" or "UNCERTAIN",\n' +
-          '    "Holiday celebrations": "YES" or "NO" or "UNCERTAIN",\n' +
-          '    "Birthday celebrations": "YES" or "NO" or "UNCERTAIN",\n' +
-          '    "Violence": "YES" or "NO" or "UNCERTAIN",\n' +
-          '    "Horror": "YES" or "NO" or "UNCERTAIN",\n' +
-          '    "Bad language": "YES" or "NO" or "UNCERTAIN",\n' +
-          '    "Alcohol / drugs": "YES" or "NO" or "UNCERTAIN",\n' +
-          '    "Gambling": "YES" or "NO" or "UNCERTAIN",\n' +
-          '    "Blasphemy": "YES" or "NO" or "UNCERTAIN"\n' +
+          '    "Romance / crushes": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
+          '    "Dating": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
+          '    "Sexual content": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
+          '    "Sexual jokes / innuendo": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
+          '    "LGBTQ romantic / sexual content": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
+          '    "Witchcraft / magic / supernatural": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
+          '    "Holiday celebrations": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
+          '    "Birthday celebrations": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
+          '    "Violence": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
+          '    "Horror": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
+          '    "Bad language": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
+          '    "Alcohol / drugs": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
+          '    "Gambling": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
+          '    "Blasphemy": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"}\n' +
           "  }\n" +
           "}";
 
@@ -310,29 +324,7 @@ export default {
         }
 
         /*
-         * VALIDATE THE AI RESULT
-         */
-
-        const allowedDecisions = [
-          "GREEN",
-          "YELLOW",
-          "RED"
-        ];
-
-        if (
-          !allowedDecisions.includes(
-            parsed.decision
-          )
-        ) {
-          parsed.decision = "YELLOW";
-        }
-
-        /*
-         * PARENT RULE ENGINE
-         *
-         * BLOCK + YES = RED
-         * REVIEW + YES = YELLOW
-         * UNCERTAIN + BLOCK/REVIEW = YELLOW
+         * NORMALISE AI CATEGORIES
          */
 
         const categories =
@@ -342,47 +334,54 @@ export default {
         const reviewCategories = [];
         const uncertainCategories = [];
 
+        /*
+         * APPLY PARENT RULES
+         */
+
         for (
           const [rule, setting]
           of Object.entries(familyRules)
         ) {
-          const normalisedSetting =
+          const selected =
             normaliseRule(setting);
 
-          const categoryResult =
-            String(
-              categories[rule] || ""
-            )
-              .toUpperCase()
-              .trim();
+          const category =
+            categories[rule];
+
+          const presence =
+            typeof category === "object"
+              ? normaliseRule(
+                  category.presence
+                )
+              : normaliseRule(category);
 
           if (
-            normalisedSetting === "BLOCK" &&
-            categoryResult === "YES"
+            selected === "BLOCK" &&
+            presence === "YES"
           ) {
             blockedCategories.push(rule);
           }
 
           if (
-            normalisedSetting === "REVIEW" &&
-            categoryResult === "YES"
+            selected === "REVIEW" &&
+            presence === "YES"
           ) {
             reviewCategories.push(rule);
           }
 
           if (
             (
-              normalisedSetting === "BLOCK" ||
-              normalisedSetting === "REVIEW"
+              selected === "BLOCK" ||
+              selected === "REVIEW"
             ) &&
-            categoryResult === "UNCERTAIN"
+            presence === "UNCERTAIN"
           ) {
             uncertainCategories.push(rule);
           }
         }
 
         /*
-         * BLOCK ALWAYS WINS
+         * BLOCK WINS
          */
 
         if (
@@ -400,12 +399,17 @@ export default {
               "CleanStream family rule engine + Cloudflare Workers AI",
             confidence:
               parsed.confidence || "MEDIUM",
+            content_type:
+              parsed.content_type ||
+              "UNKNOWN",
+            context:
+              parsed.context || [],
             categories
           });
         }
 
         /*
-         * REVIEW PRODUCES YELLOW
+         * REVIEW NEXT
          */
 
         if (
@@ -423,14 +427,17 @@ export default {
               "CleanStream family rule engine + Cloudflare Workers AI",
             confidence:
               parsed.confidence || "MEDIUM",
+            content_type:
+              parsed.content_type ||
+              "UNKNOWN",
+            context:
+              parsed.context || [],
             categories
           });
         }
 
         /*
-         * IMPORTANT UNCERTAINTY
-         *
-         * Never turn uncertainty into GREEN.
+         * UNCERTAINTY
          */
 
         if (
@@ -447,12 +454,17 @@ export default {
             source:
               "CleanStream family rule engine + Cloudflare Workers AI",
             confidence: "LOW",
+            content_type:
+              parsed.content_type ||
+              "UNKNOWN",
+            context:
+              parsed.context || [],
             categories
           });
         }
 
         /*
-         * LOW AI CONFIDENCE CANNOT PRODUCE GREEN
+         * LOW CONFIDENCE
          */
 
         if (
@@ -468,13 +480,32 @@ export default {
             source:
               "Cloudflare Workers AI",
             confidence: "LOW",
+            content_type:
+              parsed.content_type ||
+              "UNKNOWN",
+            context:
+              parsed.context || [],
             categories
           });
         }
 
         /*
-         * OTHERWISE USE THE AI RESULT
+         * FINAL AI RESULT
          */
+
+        const allowedDecisions = [
+          "GREEN",
+          "YELLOW",
+          "RED"
+        ];
+
+        if (
+          !allowedDecisions.includes(
+            parsed.decision
+          )
+        ) {
+          parsed.decision = "YELLOW";
+        }
 
         const emoji =
           parsed.decision === "GREEN"
@@ -492,10 +523,15 @@ export default {
             parsed.reason ||
             "Parent review is required.",
           source:
-            "Cloudflare Workers AI + CleanStream family rule engine",
+            "CleanStream family rule engine + Cloudflare Workers AI",
           confidence:
             parsed.confidence ||
             "MEDIUM",
+          content_type:
+            parsed.content_type ||
+            "UNKNOWN",
+          context:
+            parsed.context || [],
           categories
         });
 
