@@ -40,9 +40,6 @@ export default {
 
       /*
        * CLEANSTREAM INTERNAL CATEGORY SYSTEM
-       *
-       * These IDs must remain stable even if
-       * the wording shown to parents changes.
        */
 
       const categories = {
@@ -59,7 +56,8 @@ export default {
           label: "Sexual jokes / innuendo"
         },
         lgbtq_romantic: {
-          label: "LGBTQ romantic / sexual content"
+          label:
+            "LGBTQ romantic / sexual content"
         },
         magic: {
           label:
@@ -92,7 +90,7 @@ export default {
       };
 
       /*
-       * MATCH PARENT RULE NAMES TO INTERNAL IDs
+       * PARENT RULE ALIASES
        */
 
       const ruleAliases = {
@@ -157,17 +155,11 @@ export default {
         ]
       };
 
-      /*
-       * GET THE SETTING FOR EACH INTERNAL CATEGORY
-       */
-
       const getRuleSetting = (categoryId) => {
         const aliases =
           ruleAliases[categoryId] || [];
 
-        for (
-          const alias of aliases
-        ) {
+        for (const alias of aliases) {
           if (
             Object.prototype.hasOwnProperty.call(
               familyRules,
@@ -179,11 +171,6 @@ export default {
             );
           }
         }
-
-        /*
-         * Also support profiles that already use
-         * the new internal IDs.
-         */
 
         if (
           Object.prototype.hasOwnProperty.call(
@@ -200,7 +187,7 @@ export default {
       };
 
       /*
-       * TITLE-BASED HARD CHECKS
+       * TITLE-BASED HARD RULES
        */
 
       const lowerTitle =
@@ -256,14 +243,11 @@ export default {
         );
 
       /*
-       * HARD RED:
-       * These are based only on what the title
-       * clearly indicates.
+       * HARD RED RULES
        */
 
       if (
-        getRuleSetting("holiday") ===
-          "BLOCK" &&
+        getRuleSetting("holiday") === "BLOCK" &&
         containsHoliday
       ) {
         return Response.json({
@@ -279,8 +263,7 @@ export default {
       }
 
       if (
-        getRuleSetting("birthday") ===
-          "BLOCK" &&
+        getRuleSetting("birthday") === "BLOCK" &&
         containsBirthday
       ) {
         return Response.json({
@@ -296,8 +279,7 @@ export default {
       }
 
       if (
-        getRuleSetting("magic") ===
-          "BLOCK" &&
+        getRuleSetting("magic") === "BLOCK" &&
         containsMagic
       ) {
         return Response.json({
@@ -330,16 +312,14 @@ export default {
 
       try {
         /*
-         * BUILD RULE SUMMARY
+         * FAMILY RULE SUMMARY
          */
 
         const activeRules =
           Object.keys(categories)
             .map(categoryId => {
               const setting =
-                getRuleSetting(
-                  categoryId
-                );
+                getRuleSetting(categoryId);
 
               return (
                 categoryId +
@@ -350,7 +330,7 @@ export default {
             .join("\n");
 
         /*
-         * AI PROMPT
+         * CONTEXT-AWARE AI PROMPT
          */
 
         const prompt =
@@ -368,38 +348,39 @@ export default {
           activeRules +
           "\n\n" +
 
-          "Analyse the title using ONLY the following permanent category IDs:\n\n" +
-
-          "romance = romance or crushes\n" +
-          "dating = dating or romantic relationships\n" +
-          "sexual_content = sexual content\n" +
-          "sexual_jokes = sexual jokes, innuendo or suggestive humour\n" +
-          "lgbtq_romantic = LGBTQ romantic or sexual content\n" +
-          "magic = witchcraft, wizardry, spells, sorcery or supernatural practices\n" +
-          "holiday = holiday celebrations\n" +
-          "birthday = birthday celebrations\n" +
-          "violence = violence\n" +
-          "horror = horror or frightening material\n" +
-          "bad_language = swearing or offensive language\n" +
-          "alcohol_drugs = alcohol or drugs\n" +
-          "gambling = gambling\n" +
-          "blasphemy = blasphemy or irreverent religious content\n\n" +
-
           "CONTENT TYPE:\n" +
-          "Choose EDUCATIONAL, DOCUMENTARY, FICTION, REALITY, COMEDY, ANIMATION, OTHER or UNKNOWN.\n\n" +
+          "Choose one: EDUCATIONAL, DOCUMENTARY, FICTION, REALITY, COMEDY, ANIMATION, OTHER, UNKNOWN.\n\n" +
 
           "CONTEXT:\n" +
-          "Choose any that genuinely apply: HISTORICAL_EDUCATIONAL, FICTIONAL, FANTASY, REAL_WORLD, HUMOROUS_PARODY or UNKNOWN.\n\n" +
+          "Choose any that genuinely apply: HISTORICAL_EDUCATIONAL, FICTIONAL, FANTASY, REAL_WORLD, HUMOROUS_PARODY, UNKNOWN.\n\n" +
 
           "SEVERITY:\n" +
-          "For each category use NONE, MILD, MODERATE, STRONG or UNKNOWN.\n\n" +
+          "For every detected category use NONE, MILD, MODERATE, STRONG or UNKNOWN.\n\n" +
+
+          "IMPORTANT CONTEXT RULE:\n" +
+          "Do not treat every occurrence of a category as equally serious.\n" +
+          "Consider the context and severity.\n" +
+          "For example, historical or educational discussion of violence should be distinguished from graphic fictional violence.\n" +
+          "Educational or historical context may reduce the severity classification, but must never be used to hide genuinely graphic, disturbing or otherwise serious content.\n\n" +
 
           "IMPORTANT:\n" +
           "Do not invent episodes, characters, relationships, themes, jokes, language or other content.\n" +
           "Do not claim to have researched, browsed, verified or independently checked the programme.\n" +
-          "If information is uncertain, mark the category UNCERTAIN.\n" +
+          "Use only information you genuinely know with reasonable confidence.\n" +
+          "If important information is uncertain, mark it UNCERTAIN.\n" +
           "Never turn uncertainty into GREEN.\n" +
-          "Educational or historical context must be identified when appropriate.\n\n" +
+          "A series should not automatically be rejected because it may contain individual episodes with a particular theme.\n" +
+          "Individual episodes should be screened separately whenever possible.\n\n" +
+
+          "PARENT RULE LOGIC:\n" +
+          "ALLOW = the family allows that category.\n" +
+          "REVIEW = the category requires parent review.\n" +
+          "BLOCK = the category conflicts with the family's rules.\n\n" +
+
+          "DECISION GUIDANCE:\n" +
+          "RED should be used when a BLOCK category is meaningfully present and the content is sufficiently clear and significant.\n" +
+          "YELLOW should be used when a REVIEW category is present, information is incomplete, severity is uncertain, or context makes the result require parental judgement.\n" +
+          "GREEN should be used only when no blocked or review categories are meaningfully present and confidence is strong.\n\n" +
 
           "Return ONLY valid JSON in this structure:\n\n" +
 
@@ -476,7 +457,7 @@ export default {
         const uncertain = [];
 
         /*
-         * APPLY PARENT RULES USING INTERNAL IDs
+         * APPLY FAMILY RULES
          */
 
         for (
@@ -484,34 +465,68 @@ export default {
           of Object.keys(categories)
         ) {
           const setting =
-            getRuleSetting(
-              categoryId
-            );
+            getRuleSetting(categoryId);
 
           const result =
-            aiCategories[
-              categoryId
-            ];
+            aiCategories[categoryId];
 
           const presence =
             result &&
-            typeof result ===
-              "object"
+            typeof result === "object"
               ? normalise(
                   result.presence
                 )
               : normalise(result);
 
+          const severity =
+            result &&
+            typeof result === "object"
+              ? normalise(
+                  result.severity
+                )
+              : "UNKNOWN";
+
+          /*
+           * BLOCK RULE
+           *
+           * Strong/moderate content is RED.
+           * Mild content becomes YELLOW so the
+           * parent can decide.
+           */
+
           if (
             setting === "BLOCK" &&
             presence === "YES"
           ) {
-            blocked.push(
-              categories[
-                categoryId
-              ].label
-            );
+            if (
+              severity === "STRONG" ||
+              severity === "MODERATE"
+            ) {
+              blocked.push(
+                categories[
+                  categoryId
+                ].label
+              );
+            } else if (
+              severity === "MILD"
+            ) {
+              review.push(
+                categories[
+                  categoryId
+                ].label
+              );
+            } else {
+              uncertain.push(
+                categories[
+                  categoryId
+                ].label
+              );
+            }
           }
+
+          /*
+           * REVIEW RULE
+           */
 
           if (
             setting === "REVIEW" &&
@@ -524,19 +539,53 @@ export default {
             );
           }
 
+          /*
+           * UNCERTAINTY
+           */
+
           if (
             (
               setting === "BLOCK" ||
               setting === "REVIEW"
             ) &&
-            presence ===
-              "UNCERTAIN"
+            presence === "UNCERTAIN"
           ) {
             uncertain.push(
               categories[
                 categoryId
               ].label
             );
+          }
+        }
+
+        /*
+         * CONTEXT ADJUSTMENT
+         *
+         * Historical/educational material with
+         * moderate or mild violence is sent to
+         * parent review instead of automatically
+         * being treated like entertainment violence.
+         */
+
+        const historicalEducational =
+          Array.isArray(parsed.context) &&
+          parsed.context.includes(
+            "HISTORICAL_EDUCATIONAL"
+          );
+
+        if (
+          historicalEducational &&
+          blocked.includes("Violence")
+        ) {
+          const index =
+            blocked.indexOf("Violence");
+
+          blocked.splice(index, 1);
+
+          if (
+            !review.includes("Violence")
+          ) {
+            review.push("Violence");
           }
         }
 
@@ -580,7 +629,7 @@ export default {
             reason:
               "The content was identified as: " +
               review.join(", ") +
-              ". This family's rules require parent review.",
+              ". The context or severity means parent review is recommended.",
             source:
               "CleanStream family rule engine + Cloudflare Workers AI",
             confidence:
@@ -597,7 +646,7 @@ export default {
         }
 
         /*
-         * UNCERTAINTY
+         * UNCERTAIN
          */
 
         if (uncertain.length) {
@@ -606,7 +655,7 @@ export default {
             decision: "YELLOW",
             emoji: "🟡",
             reason:
-              "CleanStream could not reliably determine whether the following family-controlled categories are present: " +
+              "CleanStream could not reliably determine the severity or presence of: " +
               uncertain.join(", ") +
               ". Parent review is required rather than guessing.",
             source:
@@ -655,12 +704,11 @@ export default {
          * FINAL RESULT
          */
 
-        const allowed =
-          [
-            "GREEN",
-            "YELLOW",
-            "RED"
-          ];
+        const allowed = [
+          "GREEN",
+          "YELLOW",
+          "RED"
+        ];
 
         if (
           !allowed.includes(
@@ -672,11 +720,9 @@ export default {
         }
 
         const emoji =
-          parsed.decision ===
-          "GREEN"
+          parsed.decision === "GREEN"
             ? "🟢"
-            : parsed.decision ===
-              "RED"
+            : parsed.decision === "RED"
               ? "🔴"
               : "🟡";
 
