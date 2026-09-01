@@ -1,766 +1,474 @@
+// CleanStream AI — Your Family Edition
+// Simple family rule engine + AI fallback
+
+const FAMILY_RULES = {
+  romance: "BLOCK",
+  dating: "BLOCK",
+  sexual_content: "BLOCK",
+  sexual_jokes: "BLOCK",
+  lgbtq_romantic: "BLOCK",
+  magic: "BLOCK",
+  holiday: "BLOCK",
+  birthday: "BLOCK",
+  violence: "REVIEW",
+  horror: "BLOCK",
+  bad_language: "REVIEW",
+  alcohol_drugs: "BLOCK",
+  gambling: "BLOCK",
+  blasphemy: "BLOCK"
+};
+
+// ============================================================
+// YOUR FAMILY'S KNOWN TITLES
+//
+// Add programmes or individual episodes here when you already
+// know the answer. These decisions override the AI.
+//
+// GREEN = okay for your family
+// RED   = not okay for your family
+// YELLOW = you want to review it yourself
+//
+// Use lowercase titles.
+// ============================================================
+
+const KNOWN_TITLES = {
+  // Examples:
+
+  "sam and cat": {
+    decision: "RED",
+    reason: "This programme is on the family's known RED list."
+  },
+
+  // "green eggs and ham": {
+  //   decision: "GREEN",
+  //   reason: "This programme is approved for the family."
+  // },
+
+  // "horrible histories": {
+  //   decision: "GREEN",
+  //   reason: "Educational history programme approved for the family."
+  // },
+
+  // Add your own titles below:
+  //
+  // "title here": {
+  //   decision: "RED",
+  //   reason: "Reason..."
+  // },
+
+  // "another title": {
+  //   decision: "GREEN",
+  //   reason: "Reason..."
+  // }
+};
+
+
+// ============================================================
+// HARD FAMILY RULES
+//
+// These are checked BEFORE AI.
+// ============================================================
+
+const HOLIDAY_WORDS = [
+  "christmas",
+  "halloween",
+  "easter",
+  "thanksgiving",
+  "new year",
+  "new year's",
+  "new years",
+  "valentine",
+  "valentine's"
+];
+
+const BIRTHDAY_WORDS = [
+  "birthday",
+  "birthdays"
+];
+
+const MAGIC_WORDS = [
+  "witch",
+  "witches",
+  "witchcraft",
+  "wizard",
+  "wizards",
+  "wizardry",
+  "spell",
+  "spells",
+  "sorcery",
+  "magic",
+  "magical"
+];
+
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+function normaliseTitle(title) {
+  return String(title || "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function containsAny(text, words) {
+  return words.some(word => text.includes(word));
+}
+
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=UTF-8",
+      "cache-control": "no-store"
+    }
+  });
+}
+
+
+// ============================================================
+// KNOWN TITLE CHECK
+// ============================================================
+
+function checkKnownTitle(title) {
+  const normalised = normaliseTitle(title);
+
+  return KNOWN_TITLES[normalised] || null;
+}
+
+
+// ============================================================
+// HARD RULE CHECK
+// ============================================================
+
+function checkHardRules(title) {
+  const normalised = normaliseTitle(title);
+
+  // Holiday
+  if (
+    FAMILY_RULES.holiday === "BLOCK" &&
+    containsAny(normalised, HOLIDAY_WORDS)
+  ) {
+    return {
+      decision: "RED",
+      reason:
+        "The title indicates a holiday-themed programme or episode, and this family's rules block holiday celebrations.",
+      source: "CleanStream family rule engine",
+      confidence: "HIGH"
+    };
+  }
+
+  // Birthday
+  if (
+    FAMILY_RULES.birthday === "BLOCK" &&
+    containsAny(normalised, BIRTHDAY_WORDS)
+  ) {
+    return {
+      decision: "RED",
+      reason:
+        "The title indicates a birthday-themed programme or episode, and this family's rules block birthday celebrations.",
+      source: "CleanStream family rule engine",
+      confidence: "HIGH"
+    };
+  }
+
+  // Magic / witchcraft
+  if (
+    FAMILY_RULES.magic === "BLOCK" &&
+    containsAny(normalised, MAGIC_WORDS)
+  ) {
+    return {
+      decision: "RED",
+      reason:
+        "The title indicates magic, witchcraft, wizardry or supernatural practices, which this family's rules block.",
+      source: "CleanStream family rule engine",
+      confidence: "HIGH"
+    };
+  }
+
+  return null;
+}
+
+
+// ============================================================
+// AI PROMPT
+// ============================================================
+
+function buildPrompt(title) {
+  return `
+You are CleanStream AI.
+
+You are checking a film, programme or episode ONLY according to this family's content rules.
+
+Do NOT use general age ratings as the deciding factor.
+Do NOT judge whether something is generally suitable for children.
+Do NOT invent information.
+Do NOT claim that you researched the programme unless information is actually provided to you.
+
+If you do not have enough reliable information to make a decision, choose YELLOW.
+
+FAMILY RULES:
+
+- Romance / crushes: ${FAMILY_RULES.romance}
+- Dating: ${FAMILY_RULES.dating}
+- Sexual content: ${FAMILY_RULES.sexual_content}
+- Sexual jokes / innuendo: ${FAMILY_RULES.sexual_jokes}
+- LGBTQ romantic / sexual content: ${FAMILY_RULES.lgbtq_romantic}
+- Witchcraft / magic / supernatural practices: ${FAMILY_RULES.magic}
+- Holiday celebrations: ${FAMILY_RULES.holiday}
+- Birthday celebrations: ${FAMILY_RULES.birthday}
+- Violence: ${FAMILY_RULES.violence}
+- Horror: ${FAMILY_RULES.horror}
+- Bad language: ${FAMILY_RULES.bad_language}
+- Alcohol / drugs: ${FAMILY_RULES.alcohol_drugs}
+- Gambling: ${FAMILY_RULES.gambling}
+- Blasphemy: ${FAMILY_RULES.blasphemy}
+
+TITLE TO CHECK:
+
+"${title}"
+
+DECISION RULES:
+
+GREEN:
+The programme appears to have no meaningful conflict with the family's rules.
+
+RED:
+There is a clear conflict with one or more BLOCK rules.
+
+YELLOW:
+You are uncertain, information is incomplete, or something may need a parent's review.
+
+IMPORTANT:
+- A clear BLOCK-rule conflict should be RED.
+- Do not turn something RED merely because it is exciting, dramatic, silly, or aimed at older children.
+- Educational or historical content should be judged by the actual family rules, not automatically treated as bad.
+- If you are unsure, choose YELLOW.
+
+Return ONLY valid JSON in exactly this structure:
+
+{
+  "decision": "GREEN",
+  "reason": "short explanation",
+  "confidence": "HIGH"
+}
+
+Allowed decision values:
+GREEN
+YELLOW
+RED
+
+Allowed confidence values:
+HIGH
+MEDIUM
+LOW
+`;
+}
+
+
+// ============================================================
+// EXTRACT JSON FROM AI RESPONSE
+// ============================================================
+
+function extractJson(text) {
+  if (!text) return null;
+
+  // First try the complete response.
+  try {
+    return JSON.parse(text.trim());
+  } catch (_) {}
+
+  // Try to find a JSON object inside markdown or extra text.
+  const match = text.match(/\{[\s\S]*\}/);
+
+  if (!match) return null;
+
+  try {
+    return JSON.parse(match[0]);
+  } catch (_) {
+    return null;
+  }
+}
+
+
+// ============================================================
+// CLEAN AI RESULT
+// ============================================================
+
+function cleanAIResult(result) {
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+
+  const allowedDecisions = ["GREEN", "YELLOW", "RED"];
+  const allowedConfidence = ["HIGH", "MEDIUM", "LOW"];
+
+  const decision = String(result.decision || "").toUpperCase();
+  const confidence = String(result.confidence || "").toUpperCase();
+  const reason = String(result.reason || "").trim();
+
+  if (!allowedDecisions.includes(decision)) {
+    return null;
+  }
+
+  return {
+    decision,
+    reason: reason || "CleanStream could not provide a detailed explanation.",
+    confidence: allowedConfidence.includes(confidence)
+      ? confidence
+      : "LOW",
+    source: "CleanStream AI"
+  };
+}
+
+
+// ============================================================
+// MAIN API
+// ============================================================
+
+async function analyseTitle(title, env) {
+  if (!title) {
+    return {
+      decision: "YELLOW",
+      reason: "Please enter a programme or episode title.",
+      confidence: "LOW",
+      source: "CleanStream"
+    };
+  }
+
+  const normalised = normaliseTitle(title);
+
+  // ----------------------------------------------------------
+  // 1. KNOWN FAMILY TITLE
+  // ----------------------------------------------------------
+
+  const known = checkKnownTitle(normalised);
+
+  if (known) {
+    return {
+      decision: known.decision,
+      reason: known.reason,
+      confidence: "HIGH",
+      source: "CleanStream family title list"
+    };
+  }
+
+  // ----------------------------------------------------------
+  // 2. HARD FAMILY RULES
+  // ----------------------------------------------------------
+
+  const hardRule = checkHardRules(normalised);
+
+  if (hardRule) {
+    return hardRule;
+  }
+
+  // ----------------------------------------------------------
+  // 3. AI FALLBACK
+  // ----------------------------------------------------------
+
+  if (!env.AI) {
+    return {
+      decision: "YELLOW",
+      reason:
+        "CleanStream could not run its AI analysis. Parent review is required.",
+      confidence: "LOW",
+      source: "CleanStream"
+    };
+  }
+
+  try {
+    const prompt = buildPrompt(title);
+
+    const response = await env.AI.run(
+      "@cf/google/gemma-4-26b-a4b-it",
+      {
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        max_tokens: 300
+      }
+    );
+
+    let aiText = "";
+
+    if (typeof response === "string") {
+      aiText = response;
+    } else if (response && response.response) {
+      aiText = response.response;
+    } else if (response && response.result) {
+      aiText = response.result;
+    } else {
+      aiText = JSON.stringify(response);
+    }
+
+    const aiResult = cleanAIResult(extractJson(aiText));
+
+    if (!aiResult) {
+      return {
+        decision: "YELLOW",
+        reason:
+          "CleanStream could not reliably interpret the AI result. Parent review is required rather than guessing.",
+        confidence: "LOW",
+        source: "CleanStream AI"
+      };
+    }
+
+    return aiResult;
+  } catch (error) {
+    return {
+      decision: "YELLOW",
+      reason:
+        "CleanStream could not complete the AI analysis. Parent review is required rather than guessing.",
+      confidence: "LOW",
+      source: "CleanStream AI"
+    };
+  }
+}
+
+
+// ============================================================
+// WORKER
+// ============================================================
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // --------------------------------------------------------
+    // API
+    // --------------------------------------------------------
+
     if (
-      url.pathname === "/api/analyze" ||
-      url.pathname === "/api/analyse"
+      url.pathname === "/api/analyse" ||
+      url.pathname === "/api/analyze"
     ) {
-      const title = (
-        url.searchParams.get("title") || ""
-      ).trim();
+      const title = url.searchParams.get("title");
 
-      if (!title) {
-        return Response.json(
-          { error: "Missing title" },
-          { status: 400 }
-        );
-      }
+      const result = await analyseTitle(title, env);
 
-      const childAge =
-        url.searchParams.get("age") || "10";
-
-      let familyRules = {};
-
-      const rulesText =
-        url.searchParams.get("rules") || "";
-
-      if (rulesText) {
-        try {
-          familyRules = JSON.parse(rulesText);
-        } catch {
-          familyRules = {};
-        }
-      }
-
-      const normalise = (value) => {
-        if (!value) return "";
-        return String(value).toUpperCase().trim();
-      };
-
-      /*
-       * CLEANSTREAM INTERNAL CATEGORY SYSTEM
-       */
-
-      const categories = {
-        romance: {
-          label: "Romance / crushes"
-        },
-        dating: {
-          label: "Dating"
-        },
-        sexual_content: {
-          label: "Sexual content"
-        },
-        sexual_jokes: {
-          label: "Sexual jokes / innuendo"
-        },
-        lgbtq_romantic: {
-          label:
-            "LGBTQ romantic / sexual content"
-        },
-        magic: {
-          label:
-            "Witchcraft / magic / supernatural"
-        },
-        holiday: {
-          label: "Holiday celebrations"
-        },
-        birthday: {
-          label: "Birthday celebrations"
-        },
-        violence: {
-          label: "Violence"
-        },
-        horror: {
-          label: "Horror"
-        },
-        bad_language: {
-          label: "Bad language"
-        },
-        alcohol_drugs: {
-          label: "Alcohol / drugs"
-        },
-        gambling: {
-          label: "Gambling"
-        },
-        blasphemy: {
-          label: "Blasphemy"
-        }
-      };
-
-      /*
-       * PARENT RULE ALIASES
-       */
-
-      const ruleAliases = {
-        romance: [
-          "Romance / crushes",
-          "Romance",
-          "Crushes"
-        ],
-        dating: [
-          "Dating"
-        ],
-        sexual_content: [
-          "Sexual content",
-          "Sexual Content"
-        ],
-        sexual_jokes: [
-          "Sexual jokes / innuendo",
-          "Sexual jokes",
-          "Sexual innuendo"
-        ],
-        lgbtq_romantic: [
-          "LGBTQ romantic / sexual content",
-          "LGBTQ content",
-          "LGBTQ"
-        ],
-        magic: [
-          "Witchcraft / magic / supernatural",
-          "Witchcraft",
-          "Magic",
-          "Supernatural"
-        ],
-        holiday: [
-          "Holiday celebrations",
-          "Holiday",
-          "Holidays"
-        ],
-        birthday: [
-          "Birthday celebrations",
-          "Birthday",
-          "Birthdays"
-        ],
-        violence: [
-          "Violence"
-        ],
-        horror: [
-          "Horror"
-        ],
-        bad_language: [
-          "Bad language",
-          "Language"
-        ],
-        alcohol_drugs: [
-          "Alcohol / drugs",
-          "Alcohol",
-          "Drugs"
-        ],
-        gambling: [
-          "Gambling"
-        ],
-        blasphemy: [
-          "Blasphemy"
-        ]
-      };
-
-      const getRuleSetting = (categoryId) => {
-        const aliases =
-          ruleAliases[categoryId] || [];
-
-        for (const alias of aliases) {
-          if (
-            Object.prototype.hasOwnProperty.call(
-              familyRules,
-              alias
-            )
-          ) {
-            return normalise(
-              familyRules[alias]
-            );
-          }
-        }
-
-        if (
-          Object.prototype.hasOwnProperty.call(
-            familyRules,
-            categoryId
-          )
-        ) {
-          return normalise(
-            familyRules[categoryId]
-          );
-        }
-
-        return "";
-      };
-
-      /*
-       * TITLE-BASED HARD RULES
-       */
-
-      const lowerTitle =
-        title.toLowerCase();
-
-      const holidayWords = [
-        "christmas",
-        "halloween",
-        "easter",
-        "thanksgiving",
-        "new year",
-        "new year's",
-        "new years",
-        "valentine",
-        "valentine's"
-      ];
-
-      const birthdayWords = [
-        "birthday",
-        "birthdays"
-      ];
-
-      const magicWords = [
-        "witch",
-        "witches",
-        "witchcraft",
-        "wizard",
-        "wizards",
-        "wizardry",
-        "spell",
-        "spells",
-        "sorcery",
-        "magic",
-        "magical"
-      ];
-
-      const containsHoliday =
-        holidayWords.some(
-          word =>
-            lowerTitle.includes(word)
-        );
-
-      const containsBirthday =
-        birthdayWords.some(
-          word =>
-            lowerTitle.includes(word)
-        );
-
-      const containsMagic =
-        magicWords.some(
-          word =>
-            lowerTitle.includes(word)
-        );
-
-      /*
-       * HARD RED RULES
-       */
-
-      if (
-        getRuleSetting("holiday") === "BLOCK" &&
-        containsHoliday
-      ) {
-        return Response.json({
-          title,
-          decision: "RED",
-          emoji: "🔴",
-          reason:
-            "The title indicates a holiday-themed episode, and this family's rules block holiday celebrations.",
-          source:
-            "CleanStream family rule engine",
-          confidence: "HIGH"
-        });
-      }
-
-      if (
-        getRuleSetting("birthday") === "BLOCK" &&
-        containsBirthday
-      ) {
-        return Response.json({
-          title,
-          decision: "RED",
-          emoji: "🔴",
-          reason:
-            "The title indicates a birthday-themed episode, and this family's rules block birthday celebrations.",
-          source:
-            "CleanStream family rule engine",
-          confidence: "HIGH"
-        });
-      }
-
-      if (
-        getRuleSetting("magic") === "BLOCK" &&
-        containsMagic
-      ) {
-        return Response.json({
-          title,
-          decision: "RED",
-          emoji: "🔴",
-          reason:
-            "The title indicates witchcraft, magic or similar supernatural practices, and this family's rules block this category.",
-          source:
-            "CleanStream family rule engine",
-          confidence: "HIGH"
-        });
-      }
-
-      /*
-       * AI UNAVAILABLE
-       */
-
-      if (!env.AI) {
-        return Response.json({
-          title,
-          decision: "YELLOW",
-          emoji: "🟡",
-          reason:
-            "AI verification is not currently available. Parent review is required rather than guessing.",
-          source: "AI unavailable",
-          confidence: "LOW"
-        });
-      }
-
-      try {
-        /*
-         * FAMILY RULE SUMMARY
-         */
-
-        const activeRules =
-          Object.keys(categories)
-            .map(categoryId => {
-              const setting =
-                getRuleSetting(categoryId);
-
-              return (
-                categoryId +
-                ": " +
-                (setting || "NOT SET")
-              );
-            })
-            .join("\n");
-
-        /*
-         * CONTEXT-AWARE AI PROMPT
-         */
-
-        const prompt =
-          "You are CleanStream AI, a strict children's content screening assistant.\n\n" +
-
-          "Evaluate the programme or episode title below for a child aged " +
-          childAge +
-          " in the UK.\n\n" +
-
-          'Title: "' +
-          title +
-          '"\n\n' +
-
-          "FAMILY RULE SETTINGS:\n" +
-          activeRules +
-          "\n\n" +
-
-          "CONTENT TYPE:\n" +
-          "Choose one: EDUCATIONAL, DOCUMENTARY, FICTION, REALITY, COMEDY, ANIMATION, OTHER, UNKNOWN.\n\n" +
-
-          "CONTEXT:\n" +
-          "Choose any that genuinely apply: HISTORICAL_EDUCATIONAL, FICTIONAL, FANTASY, REAL_WORLD, HUMOROUS_PARODY, UNKNOWN.\n\n" +
-
-          "SEVERITY:\n" +
-          "For every detected category use NONE, MILD, MODERATE, STRONG or UNKNOWN.\n\n" +
-
-          "IMPORTANT CONTEXT RULE:\n" +
-          "Do not treat every occurrence of a category as equally serious.\n" +
-          "Consider the context and severity.\n" +
-          "For example, historical or educational discussion of violence should be distinguished from graphic fictional violence.\n" +
-          "Educational or historical context may reduce the severity classification, but must never be used to hide genuinely graphic, disturbing or otherwise serious content.\n\n" +
-
-          "IMPORTANT:\n" +
-          "Do not invent episodes, characters, relationships, themes, jokes, language or other content.\n" +
-          "Do not claim to have researched, browsed, verified or independently checked the programme.\n" +
-          "Use only information you genuinely know with reasonable confidence.\n" +
-          "If important information is uncertain, mark it UNCERTAIN.\n" +
-          "Never turn uncertainty into GREEN.\n" +
-          "A series should not automatically be rejected because it may contain individual episodes with a particular theme.\n" +
-          "Individual episodes should be screened separately whenever possible.\n\n" +
-
-          "PARENT RULE LOGIC:\n" +
-          "ALLOW = the family allows that category.\n" +
-          "REVIEW = the category requires parent review.\n" +
-          "BLOCK = the category conflicts with the family's rules.\n\n" +
-
-          "DECISION GUIDANCE:\n" +
-          "RED should be used when a BLOCK category is meaningfully present and the content is sufficiently clear and significant.\n" +
-          "YELLOW should be used when a REVIEW category is present, information is incomplete, severity is uncertain, or context makes the result require parental judgement.\n" +
-          "GREEN should be used only when no blocked or review categories are meaningfully present and confidence is strong.\n\n" +
-
-          "Return ONLY valid JSON in this structure:\n\n" +
-
-          "{\n" +
-          '  "decision": "GREEN" or "YELLOW" or "RED",\n' +
-          '  "reason": "short factual explanation",\n' +
-          '  "confidence": "HIGH" or "MEDIUM" or "LOW",\n' +
-          '  "content_type": "EDUCATIONAL" or "DOCUMENTARY" or "FICTION" or "REALITY" or "COMEDY" or "ANIMATION" or "OTHER" or "UNKNOWN",\n' +
-          '  "context": ["HISTORICAL_EDUCATIONAL", "FICTIONAL", "FANTASY", "REAL_WORLD", "HUMOROUS_PARODY", "UNKNOWN"],\n' +
-          '  "categories": {\n' +
-          '    "romance": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
-          '    "dating": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
-          '    "sexual_content": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
-          '    "sexual_jokes": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
-          '    "lgbtq_romantic": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
-          '    "magic": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
-          '    "holiday": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
-          '    "birthday": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
-          '    "violence": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
-          '    "horror": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
-          '    "bad_language": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
-          '    "alcohol_drugs": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
-          '    "gambling": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"},\n' +
-          '    "blasphemy": {"presence": "YES" or "NO" or "UNCERTAIN", "severity": "NONE" or "MILD" or "MODERATE" or "STRONG" or "UNKNOWN"}\n' +
-          "  }\n" +
-          "}";
-
-        const aiResponse =
-          await env.AI.run(
-            "@cf/google/gemma-4-26b-a4b-it",
-            {
-              messages: [
-                {
-                  role: "user",
-                  content: prompt
-                }
-              ]
-            }
-          );
-
-        const text =
-          aiResponse?.choices?.[0]?.message?.content ||
-          "";
-
-        const cleaned =
-          text
-            .replace(/```json/gi, "")
-            .replace(/```/g, "")
-            .trim();
-
-        let parsed;
-
-        try {
-          parsed =
-            JSON.parse(cleaned);
-        } catch {
-          return Response.json({
-            title,
-            decision: "YELLOW",
-            emoji: "🟡",
-            reason:
-              "The AI did not provide a reliable structured result. Parent review is required rather than guessing.",
-            source:
-              "Cloudflare Workers AI",
-            confidence: "LOW"
-          });
-        }
-
-        const aiCategories =
-          parsed.categories || {};
-
-        const blocked = [];
-        const review = [];
-        const uncertain = [];
-
-        /*
-         * APPLY FAMILY RULES
-         */
-
-        for (
-          const categoryId
-          of Object.keys(categories)
-        ) {
-          const setting =
-            getRuleSetting(categoryId);
-
-          const result =
-            aiCategories[categoryId];
-
-          const presence =
-            result &&
-            typeof result === "object"
-              ? normalise(
-                  result.presence
-                )
-              : normalise(result);
-
-          const severity =
-            result &&
-            typeof result === "object"
-              ? normalise(
-                  result.severity
-                )
-              : "UNKNOWN";
-
-          /*
-           * BLOCK RULE
-           *
-           * Strong/moderate content is RED.
-           * Mild content becomes YELLOW so the
-           * parent can decide.
-           */
-
-          if (
-            setting === "BLOCK" &&
-            presence === "YES"
-          ) {
-            if (
-              severity === "STRONG" ||
-              severity === "MODERATE"
-            ) {
-              blocked.push(
-                categories[
-                  categoryId
-                ].label
-              );
-            } else if (
-              severity === "MILD"
-            ) {
-              review.push(
-                categories[
-                  categoryId
-                ].label
-              );
-            } else {
-              uncertain.push(
-                categories[
-                  categoryId
-                ].label
-              );
-            }
-          }
-
-          /*
-           * REVIEW RULE
-           */
-
-          if (
-            setting === "REVIEW" &&
-            presence === "YES"
-          ) {
-            review.push(
-              categories[
-                categoryId
-              ].label
-            );
-          }
-
-          /*
-           * UNCERTAINTY
-           */
-
-          if (
-            (
-              setting === "BLOCK" ||
-              setting === "REVIEW"
-            ) &&
-            presence === "UNCERTAIN"
-          ) {
-            uncertain.push(
-              categories[
-                categoryId
-              ].label
-            );
-          }
-        }
-
-        /*
-         * CONTEXT ADJUSTMENT
-         *
-         * Historical/educational material with
-         * moderate or mild violence is sent to
-         * parent review instead of automatically
-         * being treated like entertainment violence.
-         */
-
-        const historicalEducational =
-          Array.isArray(parsed.context) &&
-          parsed.context.includes(
-            "HISTORICAL_EDUCATIONAL"
-          );
-
-        if (
-          historicalEducational &&
-          blocked.includes("Violence")
-        ) {
-          const index =
-            blocked.indexOf("Violence");
-
-          blocked.splice(index, 1);
-
-          if (
-            !review.includes("Violence")
-          ) {
-            review.push("Violence");
-          }
-        }
-
-        /*
-         * BLOCK WINS
-         */
-
-        if (blocked.length) {
-          return Response.json({
-            title,
-            decision: "RED",
-            emoji: "🔴",
-            reason:
-              "The content was identified as: " +
-              blocked.join(", ") +
-              ". This family's rules block this category.",
-            source:
-              "CleanStream family rule engine + Cloudflare Workers AI",
-            confidence:
-              parsed.confidence ||
-              "MEDIUM",
-            content_type:
-              parsed.content_type ||
-              "UNKNOWN",
-            context:
-              parsed.context || [],
-            categories:
-              aiCategories
-          });
-        }
-
-        /*
-         * REVIEW
-         */
-
-        if (review.length) {
-          return Response.json({
-            title,
-            decision: "YELLOW",
-            emoji: "🟡",
-            reason:
-              "The content was identified as: " +
-              review.join(", ") +
-              ". The context or severity means parent review is recommended.",
-            source:
-              "CleanStream family rule engine + Cloudflare Workers AI",
-            confidence:
-              parsed.confidence ||
-              "MEDIUM",
-            content_type:
-              parsed.content_type ||
-              "UNKNOWN",
-            context:
-              parsed.context || [],
-            categories:
-              aiCategories
-          });
-        }
-
-        /*
-         * UNCERTAIN
-         */
-
-        if (uncertain.length) {
-          return Response.json({
-            title,
-            decision: "YELLOW",
-            emoji: "🟡",
-            reason:
-              "CleanStream could not reliably determine the severity or presence of: " +
-              uncertain.join(", ") +
-              ". Parent review is required rather than guessing.",
-            source:
-              "CleanStream family rule engine + Cloudflare Workers AI",
-            confidence: "LOW",
-            content_type:
-              parsed.content_type ||
-              "UNKNOWN",
-            context:
-              parsed.context || [],
-            categories:
-              aiCategories
-          });
-        }
-
-        /*
-         * LOW CONFIDENCE
-         */
-
-        if (
-          normalise(
-            parsed.confidence
-          ) === "LOW"
-        ) {
-          return Response.json({
-            title,
-            decision: "YELLOW",
-            emoji: "🟡",
-            reason:
-              parsed.reason ||
-              "The AI is not sufficiently confident to give a GREEN decision.",
-            source:
-              "Cloudflare Workers AI",
-            confidence: "LOW",
-            content_type:
-              parsed.content_type ||
-              "UNKNOWN",
-            context:
-              parsed.context || [],
-            categories:
-              aiCategories
-          });
-        }
-
-        /*
-         * FINAL RESULT
-         */
-
-        const allowed = [
-          "GREEN",
-          "YELLOW",
-          "RED"
-        ];
-
-        if (
-          !allowed.includes(
-            parsed.decision
-          )
-        ) {
-          parsed.decision =
-            "YELLOW";
-        }
-
-        const emoji =
-          parsed.decision === "GREEN"
-            ? "🟢"
-            : parsed.decision === "RED"
-              ? "🔴"
-              : "🟡";
-
-        return Response.json({
-          title,
-          decision:
-            parsed.decision,
-          emoji,
-          reason:
-            parsed.reason ||
-            "Parent review is required.",
-          source:
-            "CleanStream family rule engine + Cloudflare Workers AI",
-          confidence:
-            parsed.confidence ||
-            "MEDIUM",
-          content_type:
-            parsed.content_type ||
-            "UNKNOWN",
-          context:
-            parsed.context || [],
-          categories:
-            aiCategories
-        });
-
-      } catch (error) {
-        return Response.json({
-          title,
-          decision: "YELLOW",
-          emoji: "🟡",
-          reason:
-            "AI verification could not be completed. Parent review is required.",
-          source: "AI error",
-          confidence: "LOW"
-        });
-      }
+      return jsonResponse({
+        title: title || "",
+        ...result
+      });
     }
 
-    return env.ASSETS.fetch(request);
+    // --------------------------------------------------------
+    // WEBSITE
+    // --------------------------------------------------------
+
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+
+    return new Response("CleanStream AI is running.", {
+      headers: {
+        "content-type": "text/plain; charset=UTF-8"
+      }
+    });
   }
 };
