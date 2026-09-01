@@ -100,15 +100,9 @@ function normaliseTitle(title) {
     .replace(/\s+/g, " ");
 }
 
-function containsAny(text, words) {
-  return words.some(function (word) {
-    return text.includes(word);
-  });
-}
-
-function jsonResponse(data, status) {
+function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data, null, 2), {
-    status: status || 200,
+    status,
     headers: {
       "content-type": "application/json; charset=UTF-8",
       "cache-control": "no-store"
@@ -116,16 +110,16 @@ function jsonResponse(data, status) {
   });
 }
 
-function checkKnownTitle(title) {
-  return KNOWN_TITLES[normaliseTitle(title)] || null;
+function containsAny(text, words) {
+  return words.some(word => text.includes(word));
 }
 
-function checkHardRules(title) {
-  const normalised = normaliseTitle(title);
+function hardRule(title) {
+  const t = normaliseTitle(title);
 
   if (
     FAMILY_RULES.holiday === "BLOCK" &&
-    containsAny(normalised, HOLIDAY_WORDS)
+    containsAny(t, HOLIDAY_WORDS)
   ) {
     return {
       decision: "RED",
@@ -138,7 +132,7 @@ function checkHardRules(title) {
 
   if (
     FAMILY_RULES.birthday === "BLOCK" &&
-    containsAny(normalised, BIRTHDAY_WORDS)
+    containsAny(t, BIRTHDAY_WORDS)
   ) {
     return {
       decision: "RED",
@@ -151,7 +145,7 @@ function checkHardRules(title) {
 
   if (
     FAMILY_RULES.magic === "BLOCK" &&
-    containsAny(normalised, MAGIC_WORDS)
+    containsAny(t, MAGIC_WORDS)
   ) {
     return {
       decision: "RED",
@@ -165,265 +159,172 @@ function checkHardRules(title) {
   return null;
 }
 
-function buildPrompt(title) {
-  return `
-You are CleanStream AI.
+async function fetchWikipedia(title) {
+  try {
+    const searchUrl =
+      "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=" +
+      encodeURIComponent(title) +
+      "&format=json&origin=*";
 
-Analyze this programme or episode according to this family's specific rules.
+    const searchResponse = await fetch(searchUrl, {
+      headers: {
+        "user-agent": "CleanStreamAI/0.3"
+      }
+    });
 
-TITLE:
-"${title}"
+    if (!searchResponse.ok) return null;
+
+    const searchData = await searchResponse.json();
+    const first = searchData?.query?.search?.[0];
+
+    if (!first) return null;
+
+    const summaryUrl =
+      "https://en.wikipedia.org/api/rest_v1/page/summary/" +
+      encodeURIComponent(first.title.replace(/ /g, "_"));
+
+    const summaryResponse = await fetch(summaryUrl, {
+      headers: {
+        "user-agent": "CleanStreamAI/0.3"
+      }
+    });
+
+    if (!summaryResponse.ok) return null;
+
+    const summary = await summaryResponse.json();
+
+    return {
+      source: "Wikipedia",
+      title: summary.title || first.title,
+      extract: summary.extract || ""
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+async function fetchTVMaze(title) {
+  try {
+    const url =
+      "https://api.tvmaze.com/search/shows?q=" +
+      encodeURIComponent(title);
+
+    const response = await fetch(url);
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const first = data?.[0]?.show;
+
+    if (!first) return null;
+
+    return {
+      source: "TVmaze",
+      title: first.name || title,
+      type: first.type || "",
+      genres: Array.isArray(first.genres)
+        ? first.genres.join(", ")
+        : "",
+      summary: String(first.summary || "")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim(),
+      premiered: first.premiered || "",
+      status: first.status || ""
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+async function getProgrammeInformation(title) {
+  const [wikipedia, tvmaze] = await Promise.all([
+    fetchWikipedia(title),
+    fetchTVMaze(title)
+  ]);
+
+  return {
+    wikipedia,
+    tvmaze
+  };
+}
+
+function buildPrompt(title, information) {
+  return `You are CleanStream AI, a family-specific content screening system.
+
+Analyse the programme/movie/episode named "${title}" using the information supplied below.
+
+The supplied information comes from internet sources.
+
+Do not invent details that are not supported by the information.
 
 FAMILY RULES:
 
-Romance / crushes: ${FAMILY_RULES.romance}
-Dating: ${FAMILY_RULES.dating}
-Sexual content: ${FAMILY_RULES.sexual_content}
-Sexual jokes / innuendo: ${FAMILY_RULES.sexual_jokes}
-LGBTQ romantic / sexual content: ${FAMILY_RULES.lgbtq_romantic}
-Magic / witchcraft / supernatural practices: ${FAMILY_RULES.magic}
-Holiday celebrations: ${FAMILY_RULES.holiday}
-Birthday celebrations: ${FAMILY_RULES.birthday}
-Violence: ${FAMILY_RULES.violence}
-Horror: ${FAMILY_RULES.horror}
-Bad language: ${FAMILY_RULES.bad_language}
-Alcohol / drugs: ${FAMILY_RULES.alcohol_drugs}
-Gambling: ${FAMILY_RULES.gambling}
-Blasphemy: ${FAMILY_RULES.blasphemy}
+${JSON.stringify(FAMILY_RULES, null, 2)}
 
-For each category determine:
+SOURCE INFORMATION:
 
-presence:
-YES, NO, or UNCERTAIN
-
-severity:
-NONE, MILD, MODERATE, STRONG, or UNKNOWN
-
-Also determine:
-
-content_type:
-EDUCATIONAL, DOCUMENTARY, FICTION, REALITY, COMEDY, ANIMATION, OTHER, UNKNOWN
-
-context:
-HISTORICAL_EDUCATIONAL, FICTIONAL, FANTASY, REAL_WORLD, HUMOROUS_PARODY, UNKNOWN
+${JSON.stringify(information, null, 2)}
 
 IMPORTANT:
 
-- Follow this family's rules, not general age ratings.
-- Do not invent facts.
-- Do not claim you researched the title.
-- Do not automatically mark educational or historical violence as RED.
-- Clear conflict with a BLOCK rule should be RED.
-- A mild BLOCK category should normally be YELLOW unless another clear conflict exists.
-- REVIEW categories normally result in YELLOW.
-- If important information is uncertain, return YELLOW.
+- Judge against this family's rules, not a general age rating.
+- Romance/crushes, dating, sexual content, sexual jokes, LGBTQ romantic/sexual content, magic, holidays, birthdays, alcohol/drugs, gambling and blasphemy are BLOCK categories.
+- Violence is REVIEW, so educational/historical violence should normally be YELLOW rather than automatically RED.
+- If a BLOCK category is clearly present, return RED.
+- If a BLOCK category may be present but the evidence is incomplete, return YELLOW.
 - If there is no meaningful conflict with the family rules, return GREEN.
+- If the information is insufficient, return YELLOW.
+- Do not claim you researched anything beyond the supplied source information.
 
-Return ONLY valid JSON.
-
-Use this structure:
+Return ONLY valid JSON in this form:
 
 {
   "decision": "GREEN",
-  "reason": "short explanation",
+  "reason": "short clear explanation",
   "confidence": "HIGH",
   "content_type": "ANIMATION",
-  "context": "FICTIONAL",
+  "context": "REAL_WORLD",
   "categories": {
-    "romance": {"presence": "NO", "severity": "NONE"},
-    "dating": {"presence": "NO", "severity": "NONE"},
-    "sexual_content": {"presence": "NO", "severity": "NONE"},
-    "sexual_jokes": {"presence": "NO", "severity": "NONE"},
-    "lgbtq_romantic": {"presence": "NO", "severity": "NONE"},
-    "magic": {"presence": "NO", "severity": "NONE"},
-    "holiday": {"presence": "NO", "severity": "NONE"},
-    "birthday": {"presence": "NO", "severity": "NONE"},
-    "violence": {"presence": "NO", "severity": "NONE"},
-    "horror": {"presence": "NO", "severity": "NONE"},
-    "bad_language": {"presence": "NO", "severity": "NONE"},
-    "alcohol_drugs": {"presence": "NO", "severity": "NONE"},
-    "gambling": {"presence": "NO", "severity": "NONE"},
-    "blasphemy": {"presence": "NO", "severity": "NONE"}
+    "romance": {"presence":"NO","severity":"NONE"},
+    "dating": {"presence":"NO","severity":"NONE"},
+    "sexual_content": {"presence":"NO","severity":"NONE"},
+    "sexual_jokes": {"presence":"NO","severity":"NONE"},
+    "lgbtq_romantic": {"presence":"NO","severity":"NONE"},
+    "magic": {"presence":"NO","severity":"NONE"},
+    "holiday": {"presence":"NO","severity":"NONE"},
+    "birthday": {"presence":"NO","severity":"NONE"},
+    "violence": {"presence":"NO","severity":"NONE"},
+    "horror": {"presence":"NO","severity":"NONE"},
+    "bad_language": {"presence":"NO","severity":"NONE"},
+    "alcohol_drugs": {"presence":"NO","severity":"NONE"},
+    "gambling": {"presence":"NO","severity":"NONE"},
+    "blasphemy": {"presence":"NO","severity":"NONE"}
   }
 }
 `;
 }
 
-function extractJson(text) {
-  if (!text) {
-    return null;
-  }
+function parseAI(text) {
+  if (!text) return null;
 
   try {
     return JSON.parse(text.trim());
-  } catch (error) {
-  }
+  } catch (_) {}
 
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
 
-  if (start === -1 || end === -1 || end <= start) {
-    return null;
-  }
+  if (start < 0 || end <= start) return null;
 
   try {
     return JSON.parse(text.slice(start, end + 1));
-  } catch (error) {
+  } catch (_) {
     return null;
   }
 }
 
-function normaliseAIResult(result) {
-  if (!result || typeof result !== "object") {
-    return null;
-  }
-
-  const decision = String(result.decision || "").toUpperCase();
-
-  if (
-    decision !== "GREEN" &&
-    decision !== "YELLOW" &&
-    decision !== "RED"
-  ) {
-    return null;
-  }
-
-  const confidenceValue = String(
-    result.confidence || "LOW"
-  ).toUpperCase();
-
-  const confidence =
-    confidenceValue === "HIGH" ||
-    confidenceValue === "MEDIUM" ||
-    confidenceValue === "LOW"
-      ? confidenceValue
-      : "LOW";
-
-  return {
-    decision: decision,
-    reason:
-      String(result.reason || "").trim() ||
-      "CleanStream could not provide a detailed explanation.",
-    confidence: confidence,
-    content_type:
-      String(result.content_type || "UNKNOWN").toUpperCase(),
-    context:
-      String(result.context || "UNKNOWN").toUpperCase(),
-    categories: result.categories || {}
-  };
-}
-
-function categoryName(category) {
-  const names = {
-    romance: "Romance / crushes",
-    dating: "Dating",
-    sexual_content: "Sexual content",
-    sexual_jokes: "Sexual jokes / innuendo",
-    lgbtq_romantic: "LGBTQ romantic / sexual content",
-    magic: "Magic / witchcraft",
-    holiday: "Holiday celebrations",
-    birthday: "Birthday celebrations",
-    violence: "Violence",
-    horror: "Horror",
-    bad_language: "Bad language",
-    alcohol_drugs: "Alcohol / drugs",
-    gambling: "Gambling",
-    blasphemy: "Blasphemy"
-  };
-
-  return names[category] || category;
-}
-
-function applyFamilyRules(ai) {
-  const categories = ai.categories || {};
-
-  const blocked = [];
-  const review = [];
-  const uncertain = [];
-
-  for (const category of Object.keys(FAMILY_RULES)) {
-    const rule = FAMILY_RULES[category];
-    const data = categories[category];
-
-    if (!data) {
-      uncertain.push(category);
-      continue;
-    }
-
-    const presence = String(
-      data.presence || ""
-    ).toUpperCase();
-
-    const severity = String(
-      data.severity || "UNKNOWN"
-    ).toUpperCase();
-
-    if (presence === "YES") {
-      if (rule === "BLOCK") {
-        if (
-          severity === "STRONG" ||
-          severity === "MODERATE"
-        ) {
-          blocked.push(category);
-        } else if (severity === "MILD") {
-          review.push(category);
-        } else {
-          uncertain.push(category);
-        }
-      }
-
-      if (rule === "REVIEW") {
-        review.push(category);
-      }
-    }
-
-    if (presence === "UNCERTAIN") {
-      uncertain.push(category);
-    }
-  }
-
-  if (blocked.length > 0) {
-    return {
-      ...ai,
-      decision: "RED",
-      reason:
-        "CleanStream identified content that conflicts with this family's rules: " +
-        blocked.map(categoryName).join(", ") +
-        "."
-    };
-  }
-
-  if (review.length > 0) {
-    return {
-      ...ai,
-      decision: "YELLOW",
-      reason:
-        "CleanStream identified content that may need parent review: " +
-        review.map(categoryName).join(", ") +
-        "."
-    };
-  }
-
-  if (
-    uncertain.length > 0 ||
-    ai.confidence === "LOW"
-  ) {
-    return {
-      ...ai,
-      decision: "YELLOW",
-      confidence: "LOW",
-      reason:
-        "CleanStream could not reliably determine whether some family-controlled categories are present. Parent review is required rather than guessing."
-    };
-  }
-
-  return {
-    ...ai,
-    decision: "GREEN"
-  };
-}
-
-async function analyseTitle(title, env) {
+async function analyse(title, env) {
   if (!title || !String(title).trim()) {
     return {
       decision: "YELLOW",
@@ -433,21 +334,35 @@ async function analyseTitle(title, env) {
     };
   }
 
-  const known = checkKnownTitle(title);
+  const known = KNOWN_TITLES[normaliseTitle(title)];
 
   if (known) {
     return {
-      decision: known.decision,
-      reason: known.reason,
+      ...known,
       confidence: "HIGH",
       source: "CleanStream family title list"
     };
   }
 
-  const hardRule = checkHardRules(title);
+  const hard = hardRule(title);
 
-  if (hardRule) {
-    return hardRule;
+  if (hard) return hard;
+
+  // Get real programme information from the internet.
+  const information = await getProgrammeInformation(title);
+
+  const hasInformation = Boolean(
+    information.wikipedia || information.tvmaze
+  );
+
+  if (!hasInformation) {
+    return {
+      decision: "YELLOW",
+      reason:
+        "CleanStream could not find reliable programme information for this title, so it will not guess.",
+      confidence: "LOW",
+      source: "CleanStream internet information search"
+    };
   }
 
   if (!env.AI) {
@@ -467,29 +382,28 @@ async function analyseTitle(title, env) {
         messages: [
           {
             role: "user",
-            content: buildPrompt(title)
+            content: buildPrompt(title, information)
           }
         ],
         max_tokens: 1200
       }
     );
 
-    let text = "";
+    const text =
+      typeof response === "string"
+        ? response
+        : response?.response ||
+          response?.result ||
+          JSON.stringify(response);
 
-    if (typeof response === "string") {
-      text = response;
-    } else if (response && response.response) {
-      text = response.response;
-    } else if (response && response.result) {
-      text = response.result;
-    } else {
-      text = JSON.stringify(response);
-    }
+    const result = parseAI(text);
 
-    const parsed = extractJson(text);
-    const aiResult = normaliseAIResult(parsed);
-
-    if (!aiResult) {
+    if (
+      !result ||
+      !["GREEN", "YELLOW", "RED"].includes(
+        String(result.decision || "").toUpperCase()
+      )
+    ) {
       return {
         decision: "YELLOW",
         reason:
@@ -500,10 +414,23 @@ async function analyseTitle(title, env) {
     }
 
     return {
-      ...applyFamilyRules(aiResult),
-      source: "CleanStream AI"
+      title,
+      decision: String(result.decision).toUpperCase(),
+      reason:
+        String(
+          result.reason ||
+            "CleanStream completed its analysis."
+        ).trim(),
+      confidence: String(
+        result.confidence || "MEDIUM"
+      ).toUpperCase(),
+      content_type: result.content_type || "UNKNOWN",
+      context: result.context || "UNKNOWN",
+      categories: result.categories || {},
+      source:
+        "CleanStream AI + internet programme information"
     };
-  } catch (error) {
+  } catch (_) {
     return {
       decision: "YELLOW",
       reason:
@@ -524,11 +451,9 @@ export default {
     ) {
       const title = url.searchParams.get("title");
 
-      const result = await analyseTitle(title, env);
-
       return jsonResponse({
         title: title || "",
-        ...result
+        ...(await analyse(title, env))
       });
     }
 
@@ -540,7 +465,8 @@ export default {
       "CleanStream AI is running.",
       {
         headers: {
-          "content-type": "text/plain; charset=UTF-8"
+          "content-type":
+            "text/plain; charset=UTF-8"
         }
       }
     );
